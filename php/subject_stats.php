@@ -7,6 +7,26 @@ $current_year = date('Y');
 $selected_year = isset($_GET['year']) ? (int)$_GET['year'] : $current_year;
 $selected_subject = isset($_GET['subject']) ? (int)$_GET['subject'] : 0;
 
+// Get English subject ID for default selection
+$english_subject_id = 0;
+$english_sql = "SELECT id FROM subjects WHERE name = 'English' AND status = 'active' LIMIT 1";
+$english_result = $conn->query($english_sql);
+if ($english_row = $english_result->fetch_assoc()) {
+    $english_subject_id = $english_row['id'];
+}
+
+// Set default subject to English if no subject is selected
+if ($selected_subject == 0 && $english_subject_id > 0) {
+    $selected_subject = $english_subject_id;
+}
+
+// If this is the initial page load with default values, redirect to show the data
+if (!isset($_GET['year']) && !isset($_GET['subject'])) {
+    $redirect_url = "subject_stats.php?year=" . $selected_year . "&subject=" . $selected_subject;
+    header("Location: " . $redirect_url);
+    exit();
+}
+
 // Get available years
 $years = array();
 for ($i = $current_year - 5; $i <= $current_year + 5; $i++) {
