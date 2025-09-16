@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SchoolSync - Login</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="js/scripts.js"></script>
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-form">
+            <div class="logo-container">
+                <img src="images/logo.svg" alt="SchoolSync Logo">
+                <h1>SchoolSync</h1>
+            </div>
+            <h2>Teacher Login</h2>
+            
+            <!-- Demo Login Information -->
+            <div class="demo-info">
+                <h3><i class="fa-solid fa-info-circle"></i> Default Admin Login</h3>
+                <p><strong>Username:</strong> admin</p>
+                <p><strong>Password:</strong> admin</p>
+                <p class="note"><i class="fa-solid fa-shield-alt"></i> Full administrator access</p>
+            </div>
+            
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="input-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" placeholder="Enter your username" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                </div>
+                
+                <!-- Error Message Display -->
+                <div id="errorMessage" class="error-message" style="display: none;">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    <span id="errorText"></span>
+                </div>
+                
+                <button type="submit" class="login-btn">Login</button>
+            </form>
+            
+            <!-- Popup Message Container -->
+            <div id="popupMessage" class="popup-message" style="display: none;">
+                <div class="popup-content">
+                    <span id="popupText"></span>
+                    <button onclick="closePopup()" class="popup-close">&times;</button>
+                </div>
+            </div>
+        </div>
+        <div class="login-image">
+            <img src="images/loginleft.webp" alt="School Environment">
+        </div>
+    </div>
+    
+    <script>
+        function handleLogin(event) {
+            event.preventDefault();
+            
+            // Hide any previous error messages
+            document.getElementById('errorMessage').style.display = 'none';
+            
+            const formData = new FormData(event.target);
+            const username = formData.get('username');
+            const password = formData.get('password');
+            
+            // Show loading state
+            const submitBtn = event.target.querySelector('.login-btn');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Logging in...';
+            submitBtn.disabled = true;
+            
+            fetch('php/login.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showPopup(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1500);
+                } else {
+                    // Show error message below the form
+                    const errorDiv = document.getElementById('errorMessage');
+                    const errorText = document.getElementById('errorText');
+                    errorText.textContent = data.message;
+                    errorDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                // Show error message below the form
+                const errorDiv = document.getElementById('errorMessage');
+                const errorText = document.getElementById('errorText');
+                errorText.textContent = 'An error occurred. Please try again.';
+                errorDiv.style.display = 'block';
+            })
+            .finally(() => {
+                // Reset button state
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            });
+        }
+        
+        function showPopup(message, type) {
+            const popup = document.getElementById('popupMessage');
+            const popupText = document.getElementById('popupText');
+            
+            popupText.textContent = message;
+            popup.className = `popup-message popup-${type}`;
+            popup.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                closePopup();
+            }, 5000);
+        }
+        
+        function closePopup() {
+            document.getElementById('popupMessage').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

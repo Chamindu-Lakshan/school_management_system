@@ -1,0 +1,31 @@
+now update the data base according to the current website.
+
+
+ 
+put the following random data to the database.(base on srilanka)fill all student details.(from grade 1-11. add classes A,B,C. fro grade 12 and 13 classes are Art,Science,commerce
+    add 5 random students to each grade 1 each class.
+    progress to them up to grade 13 each year they end up in grade 13 by year 2025. student enter grade 1 at age 5
+    add another 5 random students to each grade 1 each class.progress to them up to grade 12 each year they end up in grade 12 by year 2025. 
+    add another 5 random students to each grade 1 each class.progress to them up to grade 11 each year they end up in grade 11 by year 2025.
+     and so on untill there are 5 students in each grade 1-13 and each class. by the time of year 2025. 
+     (all students are enrolled first in grade 1)
+     put each data manualy dont increment formulas to add data.
+        enroll stutends each year
+    student who enroll at school year 2013 will be in grade 13 by the year 2025
+
+     
+enroll students for subjects.(put each data manualy dont increment formulas to add data)
+    for selective subjects just chose a random. (put each data manualy dont increment formulas to add data)
+    from grade 1 to 5 
+        sinhala, english, math, Environment,religion 
+    from grade 6 to 9 
+        sinhala, english, math, science,religion,history,geography,civics,tamil,PTS,ICT,health,one from these subject(dance,art,music ) 
+    from grade 10 to 11 
+        sinhala, english, math, science,religion,history,one from these subject(geography,commerce,tamil ),one from these subject(art,music,dance,enlish literature),one from these subject(ict,health) 
+    from grade 12 to 13 
+        for art class sinhala,politic,religion 
+        for commerce class econe,commerce,accounting 
+        for science class science,math,chemistry,physics 
+    add those subjectss to subjects table 
+    
+also add random marks for all years up to 2025 for all 3 tearms for all subjects for all students for all grades for all classes for all years for all terms for all subjects for all students for all grades for all classes
