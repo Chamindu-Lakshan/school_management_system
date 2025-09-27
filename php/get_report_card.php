@@ -6,6 +6,82 @@ if (!isset($_SESSION['loggedin'])) {
     exit('Unauthorized');
 }
 
+// Function to generate report card table
+function generateReportCardTable($marks_data, $all_subjects, $years_data, $level) {
+    if (empty($years_data) || empty($all_subjects)) {
+        return '<p style="text-align: center; color: #64748b; padding: 20px;">No data available for this level.</p>';
+    }
+    $html = '<div style="overflow-x: auto; margin-bottom: 20px;">';
+    $html .= '<table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">';
+    $html .= '<thead style="background: #f8fafc;">';
+    $html .= '<tr>';
+    $html .= '<th style="padding: 15px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600; color: #374151; min-width: 150px;">Subject</th>';
+    foreach ($years_data as $year_data) {
+        $year = $year_data['year'];
+        $grade = $year_data['grade_number'];
+        $class = $year_data['class_name'];
+        $html .= '<th style="padding: 15px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600; color: #374151; background: #f1f5f9;">';
+        $html .= '<div style="font-size: 14px; font-weight: 700; color: #1e3a8a;">' . $year . '</div>';
+        $html .= '<div style="font-size: 12px; color: #64748b;">Grade ' . $grade . ' - ' . $class . '</div>';
+        $html .= '<div style="display: flex; justify-content: space-around; margin-top: 8px;">';
+        $html .= '<span style="font-size: 11px; font-weight: 600; color: #059669;">1st Term</span>';
+        $html .= '<span style="font-size: 11px; font-weight: 600; color: #3b82f6;">2nd Term</span>';
+        $html .= '<span style="font-size: 11px; font-weight: 600; color: #8b5cf6;">3rd Term</span>';
+        $html .= '</div>';
+        $html .= '</th>';
+    }
+    $html .= '</tr>';
+    $html .= '</thead>';
+    $html .= '<tbody>';
+    foreach ($all_subjects as $subject) {
+        $subject_name = $subject['subject_name'];
+        $html .= '<tr style="border-bottom: 1px solid #f1f5f9;">';
+        $html .= '<td style="padding: 15px; border: 1px solid #e2e8f0; font-weight: 600; color: #1e3a8a; background: #f8fafc;">' . htmlspecialchars($subject_name) . '</td>';
+        foreach ($years_data as $year_data) {
+            $year = $year_data['year'];
+            $grade = $year_data['grade_number'];
+            $html .= '<td style="padding: 15px; text-align: center; border: 1px solid #e2e8f0;">';
+            $html .= '<div style="display: flex; justify-content: space-around; gap: 5px;">';
+            $terms = array('1st term', '2nd term', '3rd term');
+            foreach ($terms as $term) {
+                $mark_data = null;
+                if (isset($marks_data[$subject_name][$year][$grade][$term])) {
+                    $mark_data = $marks_data[$subject_name][$year][$grade][$term];
+                }
+                $html .= '<div style="flex: 1; padding: 8px; border-radius: 4px; background: #f8fafc; border: 1px solid #e2e8f0;">';
+                if ($mark_data) {
+                    $mark = $mark_data['mark'];
+                    $grade_letter = $mark_data['grade'];
+                    $color = getGradeColor($grade_letter);
+                    $html .= '<div style="font-weight: 600; color: ' . $color . '; font-size: 14px;">' . $mark . '</div>';
+                    $html .= '<div style="font-size: 11px; color: ' . $color . '; font-weight: 600;">' . $grade_letter . '</div>';
+                } else {
+                    $html .= '<div style="color: #9ca3af; font-size: 12px;">-</div>';
+                    $html .= '<div style="color: #9ca3af; font-size: 10px;">N/A</div>';
+                }
+                $html .= '</div>';
+            }
+            $html .= '</div>';
+            $html .= '</td>';
+        }
+        $html .= '</tr>';
+    }
+    $html .= '</tbody>';
+    $html .= '</table>';
+    $html .= '</div>';
+    return $html;
+}
+
+// Function to get grade color
+function getGradeColor($grade_letter) {
+    switch ($grade_letter) {
+        case 'A': return '#059669'; // Green
+        case 'B': return '#3b82f6'; // Blue
+        case 'S': return '#8b5cf6'; // Purple
+        case 'F': return '#dc2626'; // Red
+        default: return '#6b7280'; // Gray
+    }
+}
 // Function to calculate grade letter from mark
 function getGradeLetter($mark) {
     if ($mark >= 75) return 'A';
@@ -14,10 +90,8 @@ function getGradeLetter($mark) {
     return 'F';
 }
 
-if (isset($_GET['student_id']) && isset($_GET['grade']) && isset($_GET['year'])) {
+if (isset($_GET['student_id'])) {
     $student_id = (int)$_GET['student_id'];
-    $grade = (int)$_GET['grade'];
-    $year = (int)$_GET['year'];
     
     // Get student information
     $student_sql = "SELECT * FROM students WHERE id = ?";
@@ -29,227 +103,202 @@ if (isset($_GET['student_id']) && isset($_GET['grade']) && isset($_GET['year']))
     if ($student_result->num_rows > 0) {
         $student = $student_result->fetch_assoc();
         
-        // Get student's marks for the specified year and grade
-        $marks_sql = "SELECT m.*, s.name as subject_name, g.grade_number, g.class_name 
-                      FROM marks m 
-                      JOIN subjects s ON m.subject_id = s.id 
-                      JOIN grades g ON m.grade_id = g.id 
-                      WHERE m.student_id = ? AND m.year = ? AND g.grade_number = ?
-                      ORDER BY s.name, m.term";
-        $marks_stmt = $conn->prepare($marks_sql);
-        $marks_stmt->bind_param("iii", $student_id, $year, $grade);
-        $marks_stmt->execute();
-        $marks_result = $marks_stmt->get_result();
+        // Get all years and grades for this student
+        $student_years_sql = "SELECT DISTINCT g.year, g.grade_number, g.class_name 
+                              FROM student_grades sg 
+                              JOIN grades g ON sg.grade_id = g.id 
+                              WHERE sg.student_id = ? AND sg.status = 'active'
+                              ORDER BY g.year, g.grade_number";
+        $student_years_stmt = $conn->prepare($student_years_sql);
+        $student_years_stmt->bind_param("i", $student_id);
+        $student_years_stmt->execute();
+        $student_years_result = $student_years_stmt->get_result();
         
-        // Organize marks by subject
-        $marks_by_subject = array();
-        $total_marks = 0;
-        $total_subjects = 0;
-        $term_marks = array('1st' => 0, '2nd' => 0, '3rd' => 0);
-        $term_counts = array('1st' => 0, '2nd' => 0, '3rd' => 0);
+        $student_years = array();
+        while ($row = $student_years_result->fetch_assoc()) {
+            $student_years[] = $row;
+        }
+        $student_years_stmt->close();
         
-        while ($mark = $marks_result->fetch_assoc()) {
+        // Get all subjects for this student across all years
+        $subjects_sql = "SELECT DISTINCT s.id, s.name as subject_name 
+                         FROM subjects s 
+                         JOIN marks m ON s.id = m.subject_id 
+                         WHERE m.student_id = ? AND s.status = 'active'
+                         ORDER BY s.name";
+        $subjects_stmt = $conn->prepare($subjects_sql);
+        $subjects_stmt->bind_param("i", $student_id);
+        $subjects_stmt->execute();
+        $subjects_result = $subjects_stmt->get_result();
+        
+        $all_subjects = array();
+        while ($row = $subjects_result->fetch_assoc()) {
+            $all_subjects[] = $row;
+        }
+        $subjects_stmt->close();
+        
+        // Get all marks for this student across all years and grades
+        $all_marks_sql = "SELECT m.*, s.name as subject_name, g.year, g.grade_number, g.class_name 
+                          FROM marks m 
+                          JOIN subjects s ON m.subject_id = s.id 
+                          JOIN grades g ON m.grade_id = g.id 
+                          WHERE m.student_id = ?
+                          ORDER BY g.year, g.grade_number, s.name, m.term";
+        $all_marks_stmt = $conn->prepare($all_marks_sql);
+        $all_marks_stmt->bind_param("i", $student_id);
+        $all_marks_stmt->execute();
+        $all_marks_result = $all_marks_stmt->get_result();
+        
+        // Organize marks by subject, year, grade, and term
+        $marks_data = array();
+        while ($mark = $all_marks_result->fetch_assoc()) {
             $subject_name = $mark['subject_name'];
-            if (!isset($marks_by_subject[$subject_name])) {
-                $marks_by_subject[$subject_name] = array();
+            $year = $mark['year'];
+            $grade = $mark['grade_number'];
+            $term = $mark['term'];
+            
+            if (!isset($marks_data[$subject_name])) {
+                $marks_data[$subject_name] = array();
             }
-            $marks_by_subject[$subject_name][$mark['term']] = array(
+            if (!isset($marks_data[$subject_name][$year])) {
+                $marks_data[$subject_name][$year] = array();
+            }
+            if (!isset($marks_data[$subject_name][$year][$grade])) {
+                $marks_data[$subject_name][$year][$grade] = array();
+            }
+            
+            $marks_data[$subject_name][$year][$grade][$term] = array(
                 'mark' => $mark['mark'],
                 'grade' => getGradeLetter($mark['mark']),
                 'remarks' => $mark['remarks']
             );
-            
-            $total_marks += $mark['mark'];
-            $total_subjects++;
-            $term_marks[$mark['term']] += $mark['mark'];
-            $term_counts[$mark['term']]++;
+        }
+        $all_marks_stmt->close();
+        
+        // Group years and grades by report card format
+        $primary_years = array();    // Grades 1-5
+        $junior_years = array();     // Grades 6-11
+        $advanced_years = array();   // Grades 12-13
+        
+        foreach ($student_years as $year_data) {
+            $grade_num = $year_data['grade_number'];
+            if ($grade_num >= 1 && $grade_num <= 5) {
+                $primary_years[] = $year_data;
+            } elseif ($grade_num >= 6 && $grade_num <= 11) {
+                $junior_years[] = $year_data;
+            } elseif ($grade_num >= 12 && $grade_num <= 13) {
+                $advanced_years[] = $year_data;
+            }
         }
         
-        // Calculate averages
-        $overall_average = $total_subjects > 0 ? round($total_marks / $total_subjects, 2) : 0;
-        $term_averages = array();
-        foreach ($term_marks as $term => $total) {
-            $term_averages[$term] = $term_counts[$term] > 0 ? round($total / $term_counts[$term], 2) : 0;
-        }
-        
-        // Determine report card format based on grade
-        $format = '';
-        if ($grade >= 1 && $grade <= 5) $format = 'Primary';
-        elseif ($grade >= 6 && $grade <= 9) $format = 'Junior Secondary';
-        elseif ($grade >= 10 && $grade <= 11) $format = 'Senior Secondary';
-        elseif ($grade >= 12 && $grade <= 13) $format = 'Advanced Level';
-        else $format = 'General';
-        
-        // Get student's class
-        $class_sql = "SELECT g.class_name FROM student_grades sg 
-                      JOIN grades g ON sg.grade_id = g.id 
-                      WHERE sg.student_id = ? AND g.year = ? AND g.grade_number = ?";
-        $class_stmt = $conn->prepare($class_sql);
-        $class_stmt->bind_param("iii", $student_id, $year, $grade);
-        $class_stmt->execute();
-        $class_result = $class_stmt->get_result();
-        $class_row = $class_result->fetch_assoc();
-        $class_name = $class_result->num_rows > 0 ? $class_row['class_name'] : 'N/A';
-        
-        $marks_stmt->close();
         $student_stmt->close();
-        $class_stmt->close();
         
         // Output report card HTML
         ?>
-        <div class="report-card" style="font-family: Arial, sans-serif; max-width: 100%;">
-            <!-- Header -->
-            <div style="text-align: center; border-bottom: 3px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 30px;">
-                <h1 style="color: #1e3a8a; margin: 0; font-size: 28px;">SCHOOLSYNC ACADEMIC REPORT CARD</h1>
-                <h2 style="color: #374151; margin: 10px 0; font-size: 20px;"><?php echo $format; ?> Level - Academic Year <?php echo $year; ?></h2>
-                <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin-top: 20px;">
-                    <div style="text-align: left;">
-                        <p><strong>Student Name:</strong> <?php echo htmlspecialchars($student['full_name']); ?></p>
-                        <p><strong>Student ID:</strong> <?php echo $student['id']; ?></p>
-                        <p><strong>Grade:</strong> <?php echo $grade; ?></p>
-                        <p><strong>Class:</strong> <?php echo $class_name; ?></p>
-                    </div>
-                    <div style="text-align: left;">
-                        <p><strong>Date of Birth:</strong> <?php echo $student['birth_date']; ?></p>
-                        <p><strong>Gender:</strong> <?php echo ucfirst($student['gender']); ?></p>
-                        <p><strong>Religion:</strong> <?php echo htmlspecialchars($student['religion']); ?></p>
-                        <p><strong>Status:</strong> <?php echo ucfirst($student['status']); ?></p>
-                    </div>
+        <div class="report-card-container" style="font-family: Arial, sans-serif; max-width: 100%;">
+            <!-- Student Header -->
+            <div class="student-header" style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px;">
+                <h1 style="margin: 0 0 10px 0; font-size: 28px;">STUDENT REPORT CARD</h1>
+                <h2 style="margin: 0 0 15px 0; font-size: 22px;"><?php echo htmlspecialchars($student['full_name']); ?></h2>
+                <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap;">
+                    <div><strong>Student ID:</strong> <?php echo $student['id']; ?></div>
+                    <div><strong>Gender:</strong> <?php echo ucfirst($student['gender']); ?></div>
+                    <div><strong>Birth Date:</strong> <?php echo $student['birth_date']; ?></div>
                 </div>
             </div>
             
-            <!-- Family Information -->
-            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-                <h3 style="color: #1e3a8a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Family Information</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
-                    <div>
-                        <p><strong>Father's Name:</strong> <?php echo htmlspecialchars($student['father_name']); ?></p>
-                        <p><strong>Mother's Name:</strong> <?php echo htmlspecialchars($student['mother_name']); ?></p>
-                    </div>
-                    <div>
-                        <p><strong>Guardian's Name:</strong> <?php echo htmlspecialchars($student['guardian_name']); ?></p>
-                        <p><strong>Guardian's Phone:</strong> <?php echo htmlspecialchars($student['guardian_phone']); ?></p>
-                    </div>
-                </div>
+            <?php if (!empty($primary_years)): ?>
+            <!-- Primary Report Card (Grades 1-5) -->
+            <div class="report-card-section" style="margin-bottom: 40px;">
+                <h3 style="text-align: center; color: #10b981; font-size: 20px; margin-bottom: 20px; padding: 10px; background: #f0fdf4; border-radius: 8px;">
+                    <i class="fa-solid fa-graduation-cap"></i> PRIMARY LEVEL (GRADES 1-5)
+                </h3>
+                <?php echo generateReportCardTable($marks_data, $all_subjects, $primary_years, 'primary'); ?>
             </div>
+            <?php endif; ?>
             
-            <!-- Academic Performance -->
-            <div style="margin-bottom: 30px;">
-                <h3 style="color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Academic Performance</h3>
-                
-                <?php if (!empty($marks_by_subject)): ?>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-                        <thead>
-                            <tr style="background: #1e3a8a; color: white;">
-                                <th style="padding: 15px; text-align: left; border: none;">Subject</th>
-                                <th style="padding: 15px; text-align: center; border: none;">1st Term</th>
-                                <th style="padding: 15px; text-align: center; border: none;">2nd Term</th>
-                                <th style="padding: 15px; text-align: center; border: none;">3rd Term</th>
-                                <th style="padding: 15px; text-align: center; border: none;">Average</th>
-                                <th style="padding: 15px; text-align: center; border: none;">Grade</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($marks_by_subject as $subject => $terms): ?>
-                                <tr style="border-bottom: 1px solid #e2e8f0;">
-                                    <td style="padding: 15px; font-weight: 600; color: #1e3a8a;"><?php echo htmlspecialchars($subject); ?></td>
-                                    <?php 
-                                    $subject_total = 0;
-                                    $subject_count = 0;
-                                    for ($term = 1; $term <= 3; $term++):
-                                        $term_name = $term == 1 ? '1st' : ($term == 2 ? '2nd' : '3rd');
-                                        $mark_data = isset($terms[$term_name]) ? $terms[$term_name] : null;
-                                        if ($mark_data) {
-                                            $subject_total += $mark_data['mark'];
-                                            $subject_count++;
-                                        }
-                                    ?>
-                                        <td style="padding: 15px; text-align: center;">
-                                            <?php if ($mark_data): ?>
-                                                <div style="font-weight: 600; color: #1e3a8a;"><?php echo $mark_data['mark']; ?></div>
-                                                <div style="font-size: 12px; color: #64748b;"><?php echo $mark_data['grade']; ?></div>
-                                            <?php else: ?>
-                                                <span style="color: #94a3b8; font-style: italic;">-</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    <?php endfor; ?>
-                                    <td style="padding: 15px; text-align: center; font-weight: 600; color: #059669;">
-                                        <?php echo $subject_count > 0 ? round($subject_total / $subject_count, 2) : '-'; ?>
-                                    </td>
-                                    <td style="padding: 15px; text-align: center;">
-                                        <?php if ($subject_count > 0): 
-                                            $avg = $subject_total / $subject_count;
-                                            $grade_letter = getGradeLetter($avg);
-                                            $grade_class = 'grade-' . strtolower($grade_letter);
-                                        ?>
-                                            <span class="grade-display <?php echo $grade_class; ?>" style="display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; font-weight: bold; font-size: 12px; color: white;">
-                                                <?php echo $grade_letter; ?>
-                                            </span>
-                                        <?php else: ?>
-                                            <span style="color: #94a3b8;">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    
-                    <!-- Summary Statistics -->
-                    <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #0ea5e9;">
-                        <h4 style="color: #0c4a6e; margin-top: 0;">Summary Statistics</h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                            <div>
-                                <p><strong>Overall Average:</strong> <span style="color: #059669; font-weight: 600; font-size: 18px;"><?php echo $overall_average; ?>%</span></p>
-                                <p><strong>Total Subjects:</strong> <?php echo $total_subjects; ?></p>
-                            </div>
-                            <div>
-                                <p><strong>1st Term Average:</strong> <?php echo $term_averages['1st']; ?>%</p>
-                                <p><strong>2nd Term Average:</strong> <?php echo $term_averages['2nd']; ?>%</p>
-                                <p><strong>3rd Term Average:</strong> <?php echo $term_averages['3rd']; ?>%</p>
-                            </div>
-                        </div>
-                    </div>
-                <?php else: ?>
-                    <div style="text-align: center; padding: 40px; color: #64748b; background: #f8fafc; border-radius: 8px;">
-                        <i class="fa-solid fa-chart-line fa-3x" style="margin-bottom: 15px;"></i>
-                        <h4>No Marks Available</h4>
-                        <p>No academic marks have been recorded for this student in the selected criteria.</p>
-                    </div>
-                <?php endif; ?>
+            <?php if (!empty($junior_years)): ?>
+            <!-- Junior Secondary Report Card (Grades 6-11) -->
+            <div class="report-card-section" style="margin-bottom: 40px;">
+                <h3 style="text-align: center; color: #3b82f6; font-size: 20px; margin-bottom: 20px; padding: 10px; background: #eff6ff; border-radius: 8px;">
+                    <i class="fa-solid fa-book-open"></i> JUNIOR SECONDARY LEVEL (GRADES 6-11)
+                </h3>
+                <?php echo generateReportCardTable($marks_data, $all_subjects, $junior_years, 'junior'); ?>
             </div>
+            <?php endif; ?>
             
-            <!-- Additional Information -->
-            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-                <h3 style="color: #1e3a8a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Additional Information</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
-                    <div>
-                        <p><strong>Address:</strong> <?php echo htmlspecialchars($student['address']); ?></p>
-                        <p><strong>Phone:</strong> <?php echo htmlspecialchars($student['phone']); ?></p>
-                        <p><strong>Email:</strong> <?php echo htmlspecialchars($student['email']); ?></p>
-                    </div>
-                    <div>
-                        <?php if ($student['special_details']): ?>
-                            <p><strong>Special Details:</strong> <?php echo htmlspecialchars($student['special_details']); ?></p>
-                        <?php endif; ?>
-                        <p><strong>Enrollment Date:</strong> <?php echo date('F j, Y', strtotime($student['created_at'])); ?></p>
-                    </div>
-                </div>
+            <?php if (!empty($advanced_years)): ?>
+            <!-- Advanced Level Report Card (Grades 12-13) -->
+            <div class="report-card-section" style="margin-bottom: 40px;">
+                <h3 style="text-align: center; color: #8b5cf6; font-size: 20px; margin-bottom: 20px; padding: 10px; background: #faf5ff; border-radius: 8px;">
+                    <i class="fa-solid fa-trophy"></i> ADVANCED LEVEL (GRADES 12-13)
+                </h3>
+                <?php echo generateReportCardTable($marks_data, $all_subjects, $advanced_years, 'advanced'); ?>
             </div>
+            <?php endif; ?>
             
-            <!-- Footer -->
-            <div style="text-align: center; border-top: 2px solid #e2e8f0; padding-top: 20px; margin-top: 30px;">
-                <p style="color: #64748b; font-size: 14px;">
-                    <strong>Report Generated:</strong> <?php echo date('F j, Y \a\t g:i A'); ?> | 
-                    <strong>System:</strong> SchoolSync School Management System
-                </p>
+            <?php if (empty($primary_years) && empty($junior_years) && empty($advanced_years)): ?>
+            <div style="text-align: center; padding: 40px; color: #64748b;">
+                <i class="fa-solid fa-inbox" style="font-size: 3rem; margin-bottom: 20px; display: block;"></i>
+                <h3>No Academic Records Found</h3>
+                <p>This student has no marks recorded in the system.</p>
             </div>
+            <?php endif; ?>
         </div>
         
         <style>
-            .grade-a { background: #10b981 !important; }
-            .grade-b { background: #3b82f6 !important; }
-            .grade-s { background: #f59e0b !important; }
-            .grade-f { background: #ef4444 !important; }
+        .report-card-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .report-card-section {
+            margin-bottom: 40px;
+        }
+        
+        .report-card-section table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .report-card-section th {
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            font-weight: 600;
+            color: #374151;
+            background: #f8fafc;
+        }
+        
+        .report-card-section td {
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .report-card-section tr:hover {
+            background-color: #f9fafb;
+        }
+        
+        @media (max-width: 768px) {
+            .report-card-container {
+                padding: 10px;
+            }
+            
+            .report-card-section table {
+                font-size: 12px;
+            }
+            
+            .report-card-section th,
+            .report-card-section td {
+                padding: 8px;
+            }
+        }
         </style>
         <?php
     } else {

@@ -2,47 +2,75 @@
 include 'config.php';
 if (!isset($_SESSION['loggedin'])) header("Location: ../index.html");
 
-// Handle mark insertion
-if (isset($_POST['insert_mark'])) {
-    $student_id = (int)$_POST['student_id'];
-    $subject_id = (int)$_POST['subject_id'];
-    $grade_id = (int)$_POST['grade_id'];
-    $year = (int)$_POST['year'];
-    $term = $_POST['term'];
-    $mark = (float)$_POST['mark'];
-    
-    // Determine grade letter
-    $grade_letter = 'F';
-    if ($mark >= 75) $grade_letter = 'A';
-    elseif ($mark >= 60) $grade_letter = 'B';
-    elseif ($mark >= 40) $grade_letter = 'S';
-    
-    // Check if mark already exists
-    $check_sql = "SELECT id FROM marks WHERE student_id = ? AND subject_id = ? AND grade_id = ? AND year = ? AND term = ?";
-    $check_stmt = $conn->prepare($check_sql);
-    $check_stmt->bind_param("iiiss", $student_id, $subject_id, $grade_id, $year, $term);
-    $check_stmt->execute();
-    $check_result = $check_stmt->get_result();
-    
-    if ($check_result->num_rows > 0) {
-        // Update existing mark
-        $update_sql = "UPDATE marks SET mark = ?, grade_letter = ?, updated_at = CURRENT_TIMESTAMP WHERE student_id = ? AND subject_id = ? AND grade_id = ? AND year = ? AND term = ?";
-        $update_stmt = $conn->prepare($update_sql);
-        $update_stmt->bind_param("dsiiiss", $mark, $grade_letter, $student_id, $subject_id, $grade_id, $year, $term);
-        $update_stmt->execute();
-        $update_stmt->close();
-        $message = "Mark updated successfully!";
-    } else {
-        // Insert new mark
-        $insert_sql = "INSERT INTO marks (student_id, subject_id, grade_id, year, term, mark, grade_letter, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        $insert_stmt = $conn->prepare($insert_sql);
-        $remarks = "Mark entered for " . $term . " term";
-        $insert_stmt->bind_param("iiissds", $student_id, $subject_id, $grade_id, $year, $term, $mark, $grade_letter, $remarks);
-        $insert_stmt->execute();
-        $insert_stmt->close();
-        $message = "Mark inserted successfully!";
+// Use correct term names as per database
+$terms = ['1st term', '2nd term', '3rd term'];
+
+// Handle mark insertion for all students/terms in a single POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $grade_id = isset($_POST['grade_id']) ? (int)$_POST['grade_id'] : 0;
+    $year = isset($_POST['year']) ? (int)$_POST['year'] : 0;
+    $subject_id = isset($_POST['subject_id']) ? (int)$_POST['subject_id'] : 0;
+
+    $message = '';
+    // Get students for this grade/class/year
+    $students = array();
+    if ($grade_id && $year && $subject_id) {
+        $student_sql = "SELECT DISTINCT s.id, s.full_name, s.gender, s.image_path 
+                        FROM students s 
+                        JOIN student_grades sg ON s.id = sg.student_id 
+                        WHERE sg.grade_id = ? AND sg.status = 'active'
+                        ORDER BY s.full_name";
+        $student_stmt = $conn->prepare($student_sql);
+        $student_stmt->bind_param("i", $grade_id);
+        $student_stmt->execute();
+        $student_result = $student_stmt->get_result();
+        while ($row = $student_result->fetch_assoc()) {
+            $students[] = $row;
+        }
+        $student_stmt->close();
     }
-    $check_stmt->close();
+
+    foreach ($students as $student) {
+        $student_id = $student['id'];
+        foreach ($terms as $term) {
+            $mark_field = "mark_{$student_id}_" . str_replace(' ', '', $term);
+            if (isset($_POST[$mark_field]) && $_POST[$mark_field] !== '') {
+                $mark = (float)$_POST[$mark_field];
+                // Determine grade letter
+                $grade_letter = 'F';
+                if ($mark >= 75) $grade_letter = 'A';
+                elseif ($mark >= 60) $grade_letter = 'B';
+                elseif ($mark >= 40) $grade_letter = 'S';
+
+                // Check if mark already exists
+                $check_sql = "SELECT id FROM marks WHERE student_id = ? AND subject_id = ? AND grade_id = ? AND year = ? AND term = ?";
+                $check_stmt = $conn->prepare($check_sql);
+                $check_stmt->bind_param("iiiss", $student_id, $subject_id, $grade_id, $year, $term);
+                $check_stmt->execute();
+                $check_result = $check_stmt->get_result();
+
+                if ($check_result->num_rows > 0) {
+                    // Update existing mark
+                    $update_sql = "UPDATE marks SET mark = ?, grade_letter = ?, updated_at = CURRENT_TIMESTAMP WHERE student_id = ? AND subject_id = ? AND grade_id = ? AND year = ? AND term = ?";
+                    $update_stmt = $conn->prepare($update_sql);
+                    $update_stmt->bind_param("dsiiiss", $mark, $grade_letter, $student_id, $subject_id, $grade_id, $year, $term);
+                    $update_stmt->execute();
+                    $update_stmt->close();
+                    $message = "Marks updated successfully!";
+                } else {
+                    // Insert new mark
+                    $insert_sql = "INSERT INTO marks (student_id, subject_id, grade_id, year, term, mark, grade_letter, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                    $insert_stmt = $conn->prepare($insert_sql);
+                    $remarks = "Mark entered for " . $term;
+                    $insert_stmt->bind_param("iiissdss", $student_id, $subject_id, $grade_id, $year, $term, $mark, $grade_letter, $remarks);
+                    $insert_stmt->execute();
+                    $insert_stmt->close();
+                    $message = "Marks inserted successfully!";
+                }
+                $check_stmt->close();
+            }
+        }
+    }
 }
 
 // Get current year as default
@@ -362,38 +390,20 @@ if ($selected_year && $selected_grade && $selected_class && $selected_subject) {
                                             </div>
                                         </div>
                                     </td>
+                                    <?php foreach ($terms as $term): ?>
+                                        <td>
+                                            <input type="number" name="mark_<?php echo $student['id']; ?>_<?php echo str_replace(' ', '', $term); ?>" 
+                                                   class="mark-input" placeholder="Mark" min="0" max="100" step="0.01"
+                                                   value="<?php echo isset($existing_marks[$student['id']][$term]) ? $existing_marks[$student['id']][$term]['mark'] : ''; ?>">
+                                            <?php if (isset($existing_marks[$student['id']][$term])): ?>
+                                                <span class="grade-display grade-<?php echo strtolower($existing_marks[$student['id']][$term]['grade']); ?>">
+                                                    <?php echo $existing_marks[$student['id']][$term]['grade']; ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endforeach; ?>
                                     <td>
-                                        <input type="number" name="mark_<?php echo $student['id']; ?>_1st" 
-                                               class="mark-input" placeholder="Mark" min="0" max="100" step="0.01"
-                                               value="<?php echo isset($existing_marks[$student['id']]['1st']) ? $existing_marks[$student['id']]['1st']['mark'] : ''; ?>">
-                                        <?php if (isset($existing_marks[$student['id']]['1st'])): ?>
-                                            <span class="grade-display grade-<?php echo strtolower($existing_marks[$student['id']]['1st']['grade']); ?>">
-                                                <?php echo $existing_marks[$student['id']]['1st']['grade']; ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <input type="number" name="mark_<?php echo $student['id']; ?>_2nd" 
-                                               class="mark-input" placeholder="Mark" min="0" max="100" step="0.01"
-                                               value="<?php echo isset($existing_marks[$student['id']]['2nd']) ? $existing_marks[$student['id']]['2nd']['mark'] : ''; ?>">
-                                        <?php if (isset($existing_marks[$student['id']]['2nd'])): ?>
-                                            <span class="grade-display grade-<?php echo strtolower($existing_marks[$student['id']]['2nd']['grade']); ?>">
-                                                <?php echo $existing_marks[$student['id']]['2nd']['grade']; ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <input type="number" name="mark_<?php echo $student['id']; ?>_3rd" 
-                                               class="mark-input" placeholder="Mark" min="0" max="100" step="0.01"
-                                               value="<?php echo isset($existing_marks[$student['id']]['3rd']) ? $existing_marks[$student['id']]['3rd']['mark'] : ''; ?>">
-                                        <?php if (isset($existing_marks[$student['id']]['3rd'])): ?>
-                                            <span class="grade-display grade-<?php echo strtolower($existing_marks[$student['id']]['3rd']['grade']); ?>">
-                                                <?php echo $existing_marks[$student['id']]['3rd']['grade']; ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <button type="submit" name="insert_mark" class="btn btn-primary btn-sm">
+                                        <button type="submit" class="btn btn-primary btn-sm">
                                             <i class="fa-solid fa-save"></i> Save
                                         </button>
                                     </td>

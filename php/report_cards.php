@@ -288,9 +288,9 @@ function getReportCardFormat($grade) {
                                 </div>
                             </div>
                             
-                            <button class="report-card-btn <?php echo $format; ?>" onclick="viewReportCard(<?php echo $student['id']; ?>, <?php echo $selected_grade; ?>, <?php echo $selected_year; ?>)">
+                            <button class="report-card-btn <?php echo $format; ?>" onclick="viewReportCard(<?php echo $student['id']; ?>)">
                                 <i class="fa-solid fa-eye"></i>
-                                View Report Card
+                                View Complete Report Card
                             </button>
                         </div>
                     <?php endforeach; ?>
@@ -325,7 +325,7 @@ function getReportCardFormat($grade) {
 
     <!-- Report Card Modal -->
     <div id="reportCardModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-content" style="max-width: 95%; max-height: 95vh; overflow-y: auto;">
             <span class="close" onclick="closeReportCardModal()">&times;</span>
             <div id="reportCardContent"></div>
         </div>
@@ -342,13 +342,13 @@ function getReportCardFormat($grade) {
             });
         });
 
-        function viewReportCard(studentId, grade, year) {
+        function viewReportCard(studentId) {
             // Show loading
-            document.getElementById('reportCardContent').innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p>Loading report card...</p></div>';
+            document.getElementById('reportCardContent').innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p>Loading complete report card...</p></div>';
             document.getElementById('reportCardModal').style.display = 'block';
             
             // Fetch report card data
-            fetch(`get_report_card.php?student_id=${studentId}&grade=${grade}&year=${year}`)
+            fetch(`get_report_card.php?student_id=${studentId}`)
                 .then(response => response.text())
                 .then(data => {
                     document.getElementById('reportCardContent').innerHTML = data;

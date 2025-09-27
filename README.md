@@ -30,7 +30,6 @@ SchoolSync is a modern, user-friendly school management system designed to strea
 - Class divisions (A, B, C for grades 1-11)
 - Specialized streams for grades 12-13 (Art, Science, Commerce)
 - Subject enrollment system
-- **Automated grade advancement** - Move students to next grade level annually
 - **Smart Defaults** - Grade 6 A and English subject pre-selected for common operations
 
 ### 📊 Academic Records
@@ -170,7 +169,6 @@ school_management_system/
 │   ├── admin_teachers.php     # Teacher management
 │   ├── subject_manage.php     # Subject management
 │   ├── assign_grade.php       # Grade assignment
-│   ├── advance_grades.php     # Automated grade advancement
 │   ├── test_marks.php         # Test marks management
 │   ├── report_cards.php       # Report generation
 │   └── ...
@@ -212,7 +210,6 @@ Ensure the following directories have write permissions:
 2. Create new grades/classes
 3. Assign students to specific grades
 4. Monitor class performance
-5. **Advance Grades** - Automatically move students to next grade level annually
 
 ### Academic Records
 1. **Test Marks**: 
@@ -326,6 +323,7 @@ For support and questions:
 - ✅ Fixed session management issues
 - ✅ Improved error handling and debugging
 - ✅ Enhanced user experience with auto-loading data
+- ✅ Removed advance_grades.php feature
 
 ## 📊 System Requirements
 
