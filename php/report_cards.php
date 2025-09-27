@@ -4,8 +4,9 @@ if (!isset($_SESSION['loggedin'])) header("Location: ../index.html");
 
 // Get current year as default
 $current_year = date('Y');
+// Set default grade to 7 (A) 
 $selected_year = isset($_GET['year']) ? (int)$_GET['year'] : $current_year;
-$selected_grade = isset($_GET['grade']) ? (int)$_GET['grade'] : 6; // Default to Grade 6
+$selected_grade = isset($_GET['grade']) ? (int)$_GET['grade'] : 7;
 
 // If this is the initial page load with default values, redirect to show the data
 if (!isset($_GET['year']) && !isset($_GET['grade'])) {

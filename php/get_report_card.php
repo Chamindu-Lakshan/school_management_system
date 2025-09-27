@@ -7,10 +7,11 @@ if (!isset($_SESSION['loggedin'])) {
 }
 
 // Function to generate report card table
-function generateReportCardTable($marks_data, $all_subjects, $years_data, $level) {
+function generateReportCardTable($marks_data, $all_subjects, $years_data, $level, $student_id = null, $conn = null) {
     if (empty($years_data) || empty($all_subjects)) {
         return '<p style="text-align: center; color: #64748b; padding: 20px;">No data available for this level.</p>';
     }
+    $terms = array('1st term', '2nd term', '3rd term');
     $html = '<div style="overflow-x: auto; margin-bottom: 20px;">';
     $html .= '<table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">';
     $html .= '<thead style="background: #f8fafc;">';
@@ -33,6 +34,7 @@ function generateReportCardTable($marks_data, $all_subjects, $years_data, $level
     $html .= '</tr>';
     $html .= '</thead>';
     $html .= '<tbody>';
+    // Subject rows
     foreach ($all_subjects as $subject) {
         $subject_name = $subject['subject_name'];
         $html .= '<tr style="border-bottom: 1px solid #f1f5f9;">';
@@ -42,17 +44,17 @@ function generateReportCardTable($marks_data, $all_subjects, $years_data, $level
             $grade = $year_data['grade_number'];
             $html .= '<td style="padding: 15px; text-align: center; border: 1px solid #e2e8f0;">';
             $html .= '<div style="display: flex; justify-content: space-around; gap: 5px;">';
-            $terms = array('1st term', '2nd term', '3rd term');
-            foreach ($terms as $term) {
+            foreach ($terms as $idx => $term) {
                 $mark_data = null;
                 if (isset($marks_data[$subject_name][$year][$grade][$term])) {
                     $mark_data = $marks_data[$subject_name][$year][$grade][$term];
                 }
+                $colors = ['#059669', '#3b82f6', '#8b5cf6'];
                 $html .= '<div style="flex: 1; padding: 8px; border-radius: 4px; background: #f8fafc; border: 1px solid #e2e8f0;">';
                 if ($mark_data) {
                     $mark = $mark_data['mark'];
                     $grade_letter = $mark_data['grade'];
-                    $color = getGradeColor($grade_letter);
+                    $color = $colors[$idx];
                     $html .= '<div style="font-weight: 600; color: ' . $color . '; font-size: 14px;">' . $mark . '</div>';
                     $html .= '<div style="font-size: 11px; color: ' . $color . '; font-weight: 600;">' . $grade_letter . '</div>';
                 } else {
@@ -66,10 +68,132 @@ function generateReportCardTable($marks_data, $all_subjects, $years_data, $level
         }
         $html .= '</tr>';
     }
+    // Total Marks row
+    $html .= '<tr style="background: #f1f5f9; font-weight: bold;">';
+    $html .= '<td style="padding: 15px; border: 1px solid #e2e8f0;">Total Marks</td>';
+    foreach ($years_data as $year_data) {
+        $year = $year_data['year'];
+        $grade = $year_data['grade_number'];
+        $html .= '<td style="padding: 15px; border: 1px solid #e2e8f0;">';
+        $html .= '<div style="display: flex; justify-content: space-around; gap: 5px;">';
+        foreach ($terms as $idx => $term) {
+            $total = 0;
+            $count = 0;
+            foreach ($all_subjects as $subject) {
+                $subject_name = $subject['subject_name'];
+                if (isset($marks_data[$subject_name][$year][$grade][$term])) {
+                    $total += $marks_data[$subject_name][$year][$grade][$term]['mark'];
+                    $count++;
+                }
+            }
+            $colors = ['#059669', '#3b82f6', '#8b5cf6'];
+            $html .= '<div style="flex: 1; padding: 8px; border-radius: 4px; background: #f8fafc; border: 1px solid #e2e8f0; color:' . $colors[$idx] . '; font-weight:600;">' . ($count ? number_format($total, 2) : '-') . '</div>';
+        }
+        $html .= '</div>';
+        $html .= '</td>';
+    }
+    $html .= '</tr>';
+    // Average Marks row
+    $html .= '<tr style="background: #f1f5f9; font-weight: bold;">';
+    $html .= '<td style="padding: 15px; border: 1px solid #e2e8f0;">Average Marks</td>';
+    foreach ($years_data as $year_data) {
+        $year = $year_data['year'];
+        $grade = $year_data['grade_number'];
+        $html .= '<td style="padding: 15px; border: 1px solid #e2e8f0;">';
+        $html .= '<div style="display: flex; justify-content: space-around; gap: 5px;">';
+        foreach ($terms as $idx => $term) {
+            $total = 0;
+            $count = 0;
+            foreach ($all_subjects as $subject) {
+                $subject_name = $subject['subject_name'];
+                if (isset($marks_data[$subject_name][$year][$grade][$term])) {
+                    $total += $marks_data[$subject_name][$year][$grade][$term]['mark'];
+                    $count++;
+                }
+            }
+            $avg = $count ? $total / $count : 0;
+            $colors = ['#059669', '#3b82f6', '#8b5cf6'];
+            $html .= '<div style="flex: 1; padding: 8px; border-radius: 4px; background: #f8fafc; border: 1px solid #e2e8f0; color:' . $colors[$idx] . '; font-weight:600;">' . ($count ? number_format($avg, 2) : '-') . '</div>';
+        }
+        $html .= '</div>';
+        $html .= '</td>';
+    }
+    $html .= '</tr>';
+    // Place in Class row
+    if ($student_id && $conn) {
+        $html .= '<tr style="background: #f1f5f9; font-weight: bold;">';
+        $html .= '<td style="padding: 15px; border: 1px solid #e2e8f0;">Place in Class</td>';
+        foreach ($years_data as $year_data) {
+            $year = $year_data['year'];
+            $grade = $year_data['grade_number'];
+            $class = $year_data['class_name'];
+            $html .= '<td style="padding: 15px; border: 1px solid #e2e8f0;">';
+            $html .= '<div style="display: flex; justify-content: space-around; gap: 5px;">';
+            foreach ($terms as $idx => $term) {
+                // Get all students in this class/year/grade
+                $place = '-';
+                $student_total = 0;
+                $student_count = 0;
+                foreach ($all_subjects as $subject) {
+                    $subject_name = $subject['subject_name'];
+                    if (isset($marks_data[$subject_name][$year][$grade][$term])) {
+                        $student_total += $marks_data[$subject_name][$year][$grade][$term]['mark'];
+                        $student_count++;
+                    }
+                }
+                if ($student_count > 0) {
+                    // Get all students' totals for this term
+                    $sql = "SELECT s.id, SUM(m.mark) as total
+                            FROM students s
+                            JOIN student_grades sg ON s.id = sg.student_id
+                            JOIN grades g ON sg.grade_id = g.id
+                            LEFT JOIN marks m ON m.student_id = s.id AND m.year = ? AND m.grade_id = g.id AND m.term = ?
+                            WHERE g.year = ? AND g.grade_number = ? AND g.class_name = ? AND sg.status = 'active'
+                            GROUP BY s.id";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("sisii", $year, $term, $year, $grade, $class);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    $totals = [];
+                    while ($row = $result->fetch_assoc()) {
+                        $totals[$row['id']] = $row['total'];
+                    }
+                    $stmt->close();
+                    // Sort totals descending
+                    arsort($totals);
+                    $rank = 1;
+                    foreach ($totals as $sid => $total) {
+                        if ($sid == $student_id) {
+                            $place = $rank . getOrdinalSuffix($rank);
+                            break;
+                        }
+                        $rank++;
+                    }
+                }
+                $colors = ['#059669', '#3b82f6', '#8b5cf6'];
+                $html .= '<div style="flex: 1; padding: 8px; border-radius: 4px; background: #f8fafc; border: 1px solid #e2e8f0; color:' . $colors[$idx] . '; font-weight:600;">' . $place . '</div>';
+            }
+            $html .= '</div>';
+            $html .= '</td>';
+        }
+        $html .= '</tr>';
+    }
     $html .= '</tbody>';
     $html .= '</table>';
     $html .= '</div>';
     return $html;
+}
+
+// Helper for ordinal suffix
+function getOrdinalSuffix($n) {
+    if (!in_array(($n % 100),array(11,12,13))){
+        switch ($n % 10){
+            case 1:  return 'st';
+            case 2:  return 'nd';
+            case 3:  return 'rd';
+        }
+    }
+    return 'th';
 }
 
 // Function to get grade color

@@ -41,6 +41,18 @@ while ($row = $subject_result->fetch_assoc()) {
     $subjects[] = $row;
 }
 
+// Get all grades for the selected year
+$all_grades = array();
+$grade_sql = "SELECT DISTINCT grade_number FROM grades WHERE year = ? ORDER BY grade_number";
+$grade_stmt = $conn->prepare($grade_sql);
+$grade_stmt->bind_param("i", $selected_year);
+$grade_stmt->execute();
+$grade_result = $grade_stmt->get_result();
+while ($row = $grade_result->fetch_assoc()) {
+    $all_grades[] = $row['grade_number'];
+}
+$grade_stmt->close();
+
 // Get subject statistics
 $subject_stats = array();
 $grade_stats = array();
@@ -120,6 +132,12 @@ if ($selected_year && $selected_subject) {
         $term_stats[] = $row;
     }
     $term_stmt->close();
+}
+
+// Build a lookup for stats by grade_number
+$stats_by_grade = array();
+foreach ($grade_stats as $grade) {
+    $stats_by_grade[$grade['grade_number']] = $grade;
 }
 ?>
 
@@ -331,7 +349,7 @@ if ($selected_year && $selected_subject) {
             </div>
             
             <!-- Performance by Grade -->
-            <?php if (!empty($grade_stats)): ?>
+            <?php if (!empty($all_grades)): ?>
                 <div class="card">
                     <h3><i class="fa-solid fa-graduation-cap"></i> Performance by Grade Level</h3>
                     <div class="chart-container">
@@ -350,13 +368,25 @@ if ($selected_year && $selected_subject) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($grade_stats as $grade): ?>
+                            <?php foreach ($all_grades as $grade_number): 
+                                $grade = isset($stats_by_grade[$grade_number]) ? $stats_by_grade[$grade_number] : [
+                                    'grade_number' => $grade_number,
+                                    'students_count' => 0,
+                                    'avg_mark' => 0,
+                                    'max_mark' => 0,
+                                    'min_mark' => 0,
+                                    'grade_a_count' => 0,
+                                    'grade_b_count' => 0,
+                                    'grade_s_count' => 0,
+                                    'grade_f_count' => 0
+                                ];
+                            ?>
                                 <tr>
-                                    <td><strong>Grade <?php echo $grade['grade_number']; ?></strong></td>
+                                    <td><strong>Grade <?php echo $grade_number; ?></strong></td>
                                     <td><?php echo $grade['students_count']; ?></td>
-                                    <td><strong style="color: #059669;"><?php echo round($grade['avg_mark'], 1); ?>%</strong></td>
-                                    <td style="color: #10b981;"><?php echo $grade['max_mark']; ?>%</td>
-                                    <td style="color: #ef4444;"><?php echo $grade['min_mark']; ?>%</td>
+                                    <td><strong style="color: #059669;"><?php echo $grade['students_count'] ? round($grade['avg_mark'], 1) . '%' : '-'; ?></strong></td>
+                                    <td style="color: #10b981;"><?php echo $grade['students_count'] ? $grade['max_mark'] . '%' : '-'; ?></td>
+                                    <td style="color: #ef4444;"><?php echo $grade['students_count'] ? $grade['min_mark'] . '%' : '-'; ?></td>
                                     <td>
                                         <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                                             <?php if ($grade['grade_a_count'] > 0): ?>
@@ -370,6 +400,14 @@ if ($selected_year && $selected_subject) {
                                             <?php endif; ?>
                                             <?php if ($grade['grade_f_count'] > 0): ?>
                                                 <span class="grade-item grade-f" style="font-size: 0.8rem; padding: 2px 6px;"><?php echo $grade['grade_f_count']; ?>F</span>
+                                            <?php endif; ?>
+                                            <?php if (
+                                                $grade['grade_a_count'] == 0 &&
+                                                $grade['grade_b_count'] == 0 &&
+                                                $grade['grade_s_count'] == 0 &&
+                                                $grade['grade_f_count'] == 0
+                                            ): ?>
+                                                <span style="color:#64748b;">-</span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -421,6 +459,14 @@ if ($selected_year && $selected_subject) {
                                             <?php if ($term['grade_f_count'] > 0): ?>
                                                 <span class="grade-item grade-f" style="font-size: 0.8rem; padding: 2px 6px;"><?php echo $term['grade_f_count']; ?>F</span>
                                             <?php endif; ?>
+                                            <?php if (
+                                                $term['grade_a_count'] == 0 &&
+                                                $term['grade_b_count'] == 0 &&
+                                                $term['grade_s_count'] == 0 &&
+                                                $term['grade_f_count'] == 0
+                                            ): ?>
+                                                <span style="color:#64748b;">-</span>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 </tr>
@@ -469,15 +515,15 @@ if ($selected_year && $selected_subject) {
         });
 
         // Grade Performance Chart
-        <?php if (!empty($grade_stats)): ?>
+        <?php if (!empty($all_grades)): ?>
         const gradeCtx = document.getElementById('gradeChart').getContext('2d');
         new Chart(gradeCtx, {
             type: 'bar',
             data: {
-                labels: [<?php echo implode(',', array_map(function($grade) { return "'Grade " . $grade['grade_number'] . "'"; }, $grade_stats)); ?>],
+                labels: [<?php echo implode(',', array_map(function($grade_number) { return "'Grade " . $grade_number . "'"; }, $all_grades)); ?>],
                 datasets: [{
                     label: 'Average Mark (%)',
-                    data: [<?php echo implode(',', array_map(function($grade) { return round($grade['avg_mark'], 1); }, $grade_stats)); ?>],
+                    data: [<?php echo implode(',', array_map(function($grade_number) use ($stats_by_grade) { return isset($stats_by_grade[$grade_number]) ? round($stats_by_grade[$grade_number]['avg_mark'], 1) : 0; }, $all_grades)); ?>],
                     backgroundColor: 'rgba(16, 185, 129, 0.8)',
                     borderColor: 'rgba(16, 185, 129, 1)',
                     borderWidth: 2
