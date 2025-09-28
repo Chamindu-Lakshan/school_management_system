@@ -1,4 +1,5 @@
 # SchoolSync - School Management System
+https://github.com/Chamindu-Lakshan/school_management_system/
 
 A comprehensive web-based school management system built with PHP, MySQL, HTML, CSS, and JavaScript. SchoolSync provides administrators and teachers with tools to manage students, grades, subjects, enrollments, and academic records efficiently.
 
